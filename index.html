@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Analisa Stock & Outstanding PO/DO</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans">
+
+  <!-- Header & Toolbar -->
+  <div class="bg-slate-900 text-white px-6 py-4 shadow-md sticky top-0 z-20">
+    <div class="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div>
+        <h1 class="text-xl font-bold tracking-tight">Analisa Stock Gudang</h1>
+        <p id="statusInfo" class="text-xs text-slate-400 mt-0.5">Memuat data dari Google Sheets...</p>
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <input id="searchInput" type="text" placeholder="Cari Kode / Nama / Type / Category..." 
+          class="px-3 py-1.5 rounded bg-slate-800 border border-slate-700 text-sm text-white placeholder-slate-400 focus:outline-none focus:border-blue-400 w-64">
+        <select id="filterSelect" class="px-3 py-1.5 rounded bg-slate-800 border border-slate-700 text-sm text-white focus:outline-none">
+          <option value="ALL">Semua Item</option>
+          <option value="PO">Ada PO Open (&gt; 0)</option>
+          <option value="DO">Ada DO Open (&gt; 0)</option>
+          <option value="MINUS">Available Stock &le; 0</option>
+        </select>
+        <button onclick="loadData()" class="px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-500 text-sm font-medium transition">
+          Refresh
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="max-w-7xl mx-auto p-4 md:p-6">
+    <!-- Ringkasan Cepat -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+      <div class="bg-white p-3.5 rounded-lg shadow-sm border border-slate-200">
+        <div class="text-xs text-slate-500">Total Item Ditampilkan</div>
+        <div id="statItems" class="text-xl font-bold text-slate-800 mt-1">-</div>
+      </div>
+      <div class="bg-white p-3.5 rounded-lg shadow-sm border border-slate-200">
+        <div class="text-xs text-slate-500">Item dengan PO Open</div>
+        <div id="statPO" class="text-xl font-bold text-emerald-600 mt-1">-</div>
+      </div>
+      <div class="bg-white p-3.5 rounded-lg shadow-sm border border-slate-200">
+        <div class="text-xs text-slate-500">Item dengan DO Open</div>
+        <div id="statDO" class="text-xl font-bold text-amber-600 mt-1">-</div>
+      </div>
+      <div class="bg-white p-3.5 rounded-lg shadow-sm border border-slate-200">
+        <div class="text-xs text-slate-500">Stok Tersedia &le; 0</div>
+        <div id="statMinus" class="text-xl font-bold text-rose-600 mt-1">-</div>
+      </div>
+    </div>
+
+    <!-- Tabel Utama -->
+    <div class="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
+      <div class="overflow-x-auto max-h-[68vh]">
+        <table class="w-full text-xs text-left border-collapse">
+          <thead class="bg-slate-800 text-slate-200 sticky top-0 z-10 uppercase">
+            <tr>
+              <th class="px-3 py-2.5">Item ID</th>
+              <th class="px-3 py-2.5">Nama Barang</th>
+              <th class="px-3 py-2.5">Type</th>
+              <th class="px-3 py-2.5">Category</th>
+              <th class="px-3 py-2.5 text-right bg-emerald-950/60">PO</th>
+              <th class="px-3 py-2.5 text-right">A02</th>
+              <th class="px-3 py-2.5 text-right">B25</th>
+              <th class="px-3 py-2.5 text-right">OFF</th>
+              <th class="px-3 py-2.5 text-right">OSP</th>
+              <th class="px-3 py-2.5 text-right">SPR</th>
+              <th class="px-3 py-2.5 text-right">SPB</th>
+              <th class="px-3 py-2.5 text-right font-bold bg-slate-700">Total Gudang</th>
+              <th class="px-3 py-2.5 text-right bg-amber-950/60">DO</th>
+              <th class="px-3 py-2.5 text-right font-bold bg-blue-950/70">Available</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody" class="divide-y divide-slate-200">
+            <tr><td colspan="14" class="text-center py-10 text-slate-400">Sedang mengambil data...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Pagination -->
+      <div class="px-4 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs">
+        <span id="pageInfo" class="text-slate-600">Halaman 1</span>
+        <div class="flex gap-2">
+          <button id="prevBtn" onclick="changePage(-1)" class="px-3 py-1 rounded border bg-white hover:bg-slate-100 disabled:opacity-40">Sebelumnya</button>
+          <button id="nextBtn" onclick="changePage(1)" class="px-3 py-1 rounded border bg-white hover:bg-slate-100 disabled:opacity-40">Berikutnya</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Detail PO / DO -->
+  <div id="detailModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4" onclick="closeModal(event)">
+    <div class="bg-white rounded-xl shadow-xl max-w-3xl w-full overflow-hidden" onclick="event.stopPropagation()">
+      <div class="px-5 py-3.5 bg-slate-900 text-white flex items-center justify-between">
+        <div>
+          <h3 id="modalTitle" class="font-bold text-base">Detail Transaksi</h3>
+          <p id="modalSubtitle" class="text-xs text-slate-300"></p>
+        </div>
+        <button onclick="hideModal()" class="text-slate-400 hover:text-white text-xl leading-none">&times;</button>
+      </div>
+      <div class="p-5 max-h-[70vh] overflow-y-auto">
+        <table class="w-full text-xs text-left border-collapse">
+          <thead id="modalHead" class="bg-slate-100 text-slate-700 border-b"></thead>
+          <tbody id="modalBody" class="divide-y divide-slate-200"></tbody>
+        </table>
+      </div>
+      <div class="px-5 py-3 bg-slate-50 border-t text-right">
+        <button onclick="hideModal()" class="px-4 py-1.5 bg-slate-800 text-white text-xs rounded hover:bg-slate-700">Tutup</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycby0zTsePQUzy6kjQbRZFeIdHZtVtzAqCmbsj5E0Zqb_JE3VYgu5tFeO_znpSveBOzeyBw/exec';
+
+    let stockData = [];
+    let poOpenData = [];
+    let doOpenData = [];
+    let filteredData = [];
+    let currentPage = 1;
+    const rowsPerPage = 50;
+
+    const fmtNum = (val) => {
+      const num = Number(val) || 0;
+      return num.toLocaleString('id-ID');
+    };
+
+    const fmtDate = (val) => {
+      if (!val) return '-';
+      const d = new Date(val);
+      return isNaN(d.getTime()) ? val : d.toISOString().split('T')[0];
+    };
+
+    async function loadData() {
+      const statusEl = document.getElementById('statusInfo');
+      statusEl.textContent = 'Mengambil data terbaru dari Google Sheets...';
+      try {
+        const res = await fetch(WEBHOOK_URL);
+        const json = await res.json();
+        if (json.status !== 'success') throw new Error(json.message);
+
+        stockData = json.data.Stock || [];
+        poOpenData = json.data.POOpen || [];
+        doOpenData = json.data.DOOpen || [];
+
+        updateStats();
+        applyFilters();
+        statusEl.textContent = `Terhubung • ${stockData.length.toLocaleString('id-ID')} item dimuat (${new Date().toLocaleTimeString('id-ID')})`;
+      } catch (err) {
+        statusEl.textContent = 'Gagal memuat data: ' + err.message;
+        document.getElementById('tableBody').innerHTML = `<tr><td colspan="14" class="text-center py-8 text-rose-600">Error: ${err.message}</td></tr>`;
+      }
+    }
+
+    function updateStats() {
+      document.getElementById('statItems').textContent = stockData.length.toLocaleString('id-ID');
+      document.getElementById('statPO').textContent = stockData.filter(r => Number(r.PO) > 0).length.toLocaleString('id-ID');
+      document.getElementById('statDO').textContent = stockData.filter(r => Number(r.DO) > 0).length.toLocaleString('id-ID');
+      document.getElementById('statMinus').textContent = stockData.filter(r => Number(r.Available_Stock) <= 0).length.toLocaleString('id-ID');
+    }
+
+    function applyFilters() {
+      const q = document.getElementById('searchInput').value.toLowerCase().trim();
+      const mode = document.getElementById('filterSelect').value;
+
+      filteredData = stockData.filter(item => {
+        if (mode === 'PO' && !(Number(item.PO) > 0)) return false;
+        if (mode === 'DO' && !(Number(item.DO) > 0)) return false;
+        if (mode === 'MINUS' && !(Number(item.Available_Stock) <= 0)) return false;
+
+        if (!q) return true;
+        return String(item.ItemId || '').toLowerCase().includes(q) ||
+               String(item.Name || '').toLowerCase().includes(q) ||
+               String(item.Type || '').toLowerCase().includes(q) ||
+               String(item.Category || '').toLowerCase().includes(q);
+      });
+
+      currentPage = 1;
+      renderTable();
+    }
+
+    function renderTable() {
+      const tbody = document.getElementById('tableBody');
+      const totalPages = Math.max(1, Math.ceil(filteredData.length / rowsPerPage));
+      if (currentPage > totalPages) currentPage = totalPages;
+
+      const start = (currentPage - 1) * rowsPerPage;
+      const slice = filteredData.slice(start, start + rowsPerPage);
+
+      if (slice.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="14" class="text-center py-8 text-slate-400">Tidak ada data yang cocok.</td></tr>`;
+      } else {
+        tbody.innerHTML = slice.map(row => {
+          const poVal = Number(row.PO) || 0;
+          const doVal = Number(row.DO) || 0;
+          const availVal = Number(row.Available_Stock) || 0;
+          const itemIdEsc = String(row.ItemId).replace(/'/g, "\\'");
+          const nameEsc = String(row.Name || '').replace(/'/g, "\\'");
+
+          const poCell = poVal > 0
+            ? `<button onclick="openDetail('PO', '${itemIdEsc}', '${nameEsc}')" class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold hover:bg-emerald-200 underline cursor-pointer">${fmtNum(poVal)}</button>`
+            : `<span class="text-slate-400">0</span>`;
+
+          const doCell = doVal > 0
+            ? `<button onclick="openDetail('DO', '${itemIdEsc}', '${nameEsc}')" class="px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-bold hover:bg-amber-200 underline cursor-pointer">${fmtNum(doVal)}</button>`
+            : `<span class="text-slate-400">0</span>`;
+
+          const availClass = availVal < 0 ? 'text-rose-600 font-bold' : (availVal === 0 ? 'text-slate-500' : 'text-blue-700 font-bold');
+
+          return `
+            <tr class="hover:bg-slate-50">
+              <td class="px-3 py-2 font-mono font-medium whitespace-nowrap">${row.ItemId}</td>
+              <td class="px-3 py-2">${row.Name || ''}</td>
+              <td class="px-3 py-2 whitespace-nowrap text-slate-600">${row.Type || '-'}</td>
+              <td class="px-3 py-2 whitespace-nowrap text-slate-600">${row.Category || '-'}</td>
+              <td class="px-3 py-2 text-right bg-emerald-50/40">${poCell}</td>
+              <td class="px-3 py-2 text-right">${fmtNum(row.A02)}</td>
+              <td class="px-3 py-2 text-right">${fmtNum(row.B25)}</td>
+              <td class="px-3 py-2 text-right">${fmtNum(row.OFF)}</td>
+              <td class="px-3 py-2 text-right">${fmtNum(row.OSP)}</td>
+              <td class="px-3 py-2 text-right">${fmtNum(row.SPR)}</td>
+              <td class="px-3 py-2 text-right">${fmtNum(row.SPB)}</td>
+              <td class="px-3 py-2 text-right font-semibold bg-slate-50">${fmtNum(row.Total_Gudang)}</td>
+              <td class="px-3 py-2 text-right bg-amber-50/40">${doCell}</td>
+              <td class="px-3 py-2 text-right bg-blue-50/40 ${availClass}">${fmtNum(availVal)}</td>
+            </tr>
+          `;
+        }).join('');
+      }
+
+      document.getElementById('pageInfo').textContent = `Menampilkan ${filteredData.length ? start + 1 : 0}–${Math.min(start + rowsPerPage, filteredData.length)} dari ${filteredData.length.toLocaleString('id-ID')} item (Hal ${currentPage}/${totalPages})`;
+      document.getElementById('prevBtn').disabled = currentPage <= 1;
+      document.getElementById('nextBtn').disabled = currentPage >= totalPages;
+    }
+
+    function changePage(delta) {
+      currentPage += delta;
+      renderTable();
+    }
+
+    function openDetail(type, itemId, itemName) {
+      const modal = document.getElementById('detailModal');
+      const title = document.getElementById('modalTitle');
+      const subtitle = document.getElementById('modalSubtitle');
+      const thead = document.getElementById('modalHead');
+      const tbody = document.getElementById('modalBody');
+
+      subtitle.textContent = `${itemId} — ${itemName}`;
+
+      if (type === 'PO') {
+        title.textContent = 'Detail PO Open (Pembelian Menggantung)';
+        const matches = poOpenData.filter(p => String(p.ItemId) === String(itemId));
+        thead.innerHTML = `
+          <tr>
+            <th class="px-3 py-2">No. Purchase Order</th>
+            <th class="px-3 py-2">Tanggal</th>
+            <th class="px-3 py-2">UOM</th>
+            <th class="px-3 py-2 text-right">Konversi</th>
+            <th class="px-3 py-2 text-right">Qty PO</th>
+          </tr>
+        `;
+        tbody.innerHTML = matches.length ? matches.map(m => `
+          <tr>
+            <td class="px-3 py-2 font-mono font-semibold text-emerald-700">${m.PurchaseOrderNo}</td>
+            <td class="px-3 py-2">${fmtDate(m.TransactionDate)}</td>
+            <td class="px-3 py-2">${m.UnitToConvert || '-'}</td>
+            <td class="px-3 py-2 text-right">${fmtNum(m.Conversion)}</td>
+            <td class="px-3 py-2 text-right font-bold">${fmtNum(m.PO)}</td>
+          </tr>
+        `).join('') : `<tr><td colspan="5" class="text-center py-4 text-slate-400">Rincian PO tidak ditemukan di tab POOpen.</td></tr>`;
+      } else {
+        title.textContent = 'Detail DO Open (Pengiriman Menggantung)';
+        const matches = doOpenData.filter(d => String(d.ItemId) === String(itemId));
+        thead.innerHTML = `
+          <tr>
+            <th class="px-3 py-2">No. Delivery Order</th>
+            <th class="px-3 py-2">Customer</th>
+            <th class="px-3 py-2">UOM</th>
+            <th class="px-3 py-2 text-right">Qty DO</th>
+          </tr>
+        `;
+        tbody.innerHTML = matches.length ? matches.map(m => `
+          <tr>
+            <td class="px-3 py-2 font-mono font-semibold text-amber-700">${m.DeliveryOrderNo}</td>
+            <td class="px-3 py-2">${m.Name || m.CustomerId || '-'}</td>
+            <td class="px-3 py-2">${m.UOM || '-'}</td>
+            <td class="px-3 py-2 text-right font-bold">${fmtNum(m.Qty)}</td>
+          </tr>
+        `).join('') : `<tr><td colspan="4" class="text-center py-4 text-slate-400">Rincian DO tidak ditemukan di tab DOOpen.</td></tr>`;
+      }
+
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function hideModal() {
+      const modal = document.getElementById('detailModal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    function closeModal(e) {
+      if (e.target.id === 'detailModal') hideModal();
+    }
+
+    document.getElementById('searchInput').addEventListener('input', applyFilters);
+    document.getElementById('filterSelect').addEventListener('change', applyFilters);
+
+    loadData();
+  </script>
+</body>
+</html>
