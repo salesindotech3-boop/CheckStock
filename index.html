@@ -10,20 +10,36 @@
 
   <!-- Header & Toolbar -->
   <div class="bg-slate-900 text-white px-6 py-4 shadow-md sticky top-0 z-20">
-    <div class="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <div class="max-w-7xl mx-auto flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
       <div>
         <h1 class="text-xl font-bold tracking-tight">Analisa Stock Gudang</h1>
         <p id="statusInfo" class="text-xs text-slate-400 mt-0.5">Memuat data dari Google Sheets...</p>
       </div>
       <div class="flex flex-wrap items-center gap-2">
         <input id="searchInput" type="text" placeholder="Cari Kode / Nama / Type / Category..." 
-          class="px-3 py-1.5 rounded bg-slate-800 border border-slate-700 text-sm text-white placeholder-slate-400 focus:outline-none focus:border-blue-400 w-64">
-        <select id="filterSelect" class="px-3 py-1.5 rounded bg-slate-800 border border-slate-700 text-sm text-white focus:outline-none">
-          <option value="ALL">Semua Item</option>
+          class="px-3 py-1.5 rounded bg-slate-800 border border-slate-700 text-sm text-white placeholder-slate-400 focus:outline-none focus:border-blue-400 w-60">
+        
+        <!-- Combobox Category -->
+        <select id="categorySelect" class="px-3 py-1.5 rounded bg-slate-800 border border-slate-700 text-sm text-white focus:outline-none focus:border-blue-400 max-w-[180px]">
+          <option value="ALL">Semua Category</option>
+        </select>
+
+        <!-- Combobox Type -->
+        <select id="typeSelect" class="px-3 py-1.5 rounded bg-slate-800 border border-slate-700 text-sm text-white focus:outline-none focus:border-blue-400 max-w-[180px]">
+          <option value="ALL">Semua Type</option>
+        </select>
+
+        <select id="filterSelect" class="px-3 py-1.5 rounded bg-slate-800 border border-slate-700 text-sm text-white focus:outline-none focus:border-blue-400">
+          <option value="ALL">Semua Status</option>
           <option value="PO">Ada PO Open (&gt; 0)</option>
           <option value="DO">Ada DO Open (&gt; 0)</option>
           <option value="MINUS">Available Stock &le; 0</option>
         </select>
+
+        <button id="resetBtn" onclick="resetFilters()" class="hidden px-3 py-1.5 rounded bg-slate-700 hover:bg-slate-600 text-xs font-medium text-slate-200 transition">
+          Reset
+        </button>
+
         <button onclick="loadData()" class="px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-500 text-sm font-medium transition">
           Refresh
         </button>
@@ -36,7 +52,7 @@
     <!-- Ringkasan Cepat -->
     <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
       <div class="bg-white p-3.5 rounded-lg shadow-sm border border-slate-200">
-        <div class="text-xs text-slate-500">Total Item Ditampilkan</div>
+        <div class="text-xs text-slate-500">Total Item (Database)</div>
         <div id="statItems" class="text-xl font-bold text-slate-800 mt-1">-</div>
       </div>
       <div class="bg-white p-3.5 rounded-lg shadow-sm border border-slate-200">
@@ -135,6 +151,59 @@
       return isNaN(d.getTime()) ? val : d.toISOString().split('T')[0];
     };
 
+    function populateDropdowns() {
+      const catSelect = document.getElementById('categorySelect');
+      const prevCat = catSelect.value;
+
+      // Ambil group Category unik & urutkan
+      const categories = [...new Set(
+        stockData
+          .map(item => String(item.Category || '').trim())
+          .filter(Boolean)
+      )].sort((a, b) => a.localeCompare(b, 'id'));
+
+      catSelect.innerHTML = `<option value="ALL">Semua Category (${categories.length})</option>` +
+        categories.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+
+      if (categories.includes(prevCat)) {
+        catSelect.value = prevCat;
+      }
+
+      updateTypeDropdown();
+    }
+
+    function updateTypeDropdown() {
+      const selectedCat = document.getElementById('categorySelect').value;
+      const typeSelect = document.getElementById('typeSelect');
+      const prevType = typeSelect.value;
+
+      // Filter source berdasarkan Category yang dipilih (jika tidak ALL)
+      const source = selectedCat === 'ALL'
+        ? stockData
+        : stockData.filter(item => String(item.Category || '').trim() === selectedCat);
+
+      const types = [...new Set(
+        source
+          .map(item => String(item.Type || '').trim())
+          .filter(Boolean)
+      )].sort((a, b) => a.localeCompare(b, 'id'));
+
+      typeSelect.innerHTML = `<option value="ALL">Semua Type (${types.length})</option>` +
+        types.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+
+      if (types.includes(prevType)) {
+        typeSelect.value = prevType;
+      }
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
     async function loadData() {
       const statusEl = document.getElementById('statusInfo');
       statusEl.textContent = 'Mengambil data terbaru dari Google Sheets...';
@@ -148,6 +217,7 @@
         doOpenData = json.data.DOOpen || [];
 
         updateStats();
+        populateDropdowns();
         applyFilters();
         statusEl.textContent = `Terhubung • ${stockData.length.toLocaleString('id-ID')} item dimuat (${new Date().toLocaleTimeString('id-ID')})`;
       } catch (err) {
@@ -161,13 +231,23 @@
       document.getElementById('statPO').textContent = stockData.filter(r => Number(r.PO) > 0).length.toLocaleString('id-ID');
       document.getElementById('statDO').textContent = stockData.filter(r => Number(r.DO) > 0).length.toLocaleString('id-ID');
       document.getElementById('statMinus').textContent = stockData.filter(r => Number(r.Available_Stock) <= 0).length.toLocaleString('id-ID');
-    }
-
-    function applyFilters() {
+    }    function applyFilters() {
       const q = document.getElementById('searchInput').value.toLowerCase().trim();
+      const selectedCat = document.getElementById('categorySelect').value;
+      const selectedType = document.getElementById('typeSelect').value;
       const mode = document.getElementById('filterSelect').value;
 
+      // Tampilkan tombol Reset jika ada filter yang aktif
+      const isFiltered = q !== '' || selectedCat !== 'ALL' || selectedType !== 'ALL' || mode !== 'ALL';
+      document.getElementById('resetBtn').classList.toggle('hidden', !isFiltered);
+
       filteredData = stockData.filter(item => {
+        const itemCat = String(item.Category || '').trim();
+        const itemType = String(item.Type || '').trim();
+
+        if (selectedCat !== 'ALL' && itemCat !== selectedCat) return false;
+        if (selectedType !== 'ALL' && itemType !== selectedType) return false;
+
         if (mode === 'PO' && !(Number(item.PO) > 0)) return false;
         if (mode === 'DO' && !(Number(item.DO) > 0)) return false;
         if (mode === 'MINUS' && !(Number(item.Available_Stock) <= 0)) return false;
@@ -175,12 +255,21 @@
         if (!q) return true;
         return String(item.ItemId || '').toLowerCase().includes(q) ||
                String(item.Name || '').toLowerCase().includes(q) ||
-               String(item.Type || '').toLowerCase().includes(q) ||
-               String(item.Category || '').toLowerCase().includes(q);
+               itemType.toLowerCase().includes(q) ||
+               itemCat.toLowerCase().includes(q);
       });
 
       currentPage = 1;
       renderTable();
+    }
+
+    function resetFilters() {
+      document.getElementById('searchInput').value = '';
+      document.getElementById('categorySelect').value = 'ALL';
+      updateTypeDropdown();
+      document.getElementById('typeSelect').value = 'ALL';
+      document.getElementById('filterSelect').value = 'ALL';
+      applyFilters();
     }
 
     function renderTable() {
@@ -308,6 +397,11 @@
     }
 
     document.getElementById('searchInput').addEventListener('input', applyFilters);
+    document.getElementById('categorySelect').addEventListener('change', () => {
+      updateTypeDropdown();
+      applyFilters();
+    });
+    document.getElementById('typeSelect').addEventListener('change', applyFilters);
     document.getElementById('filterSelect').addEventListener('change', applyFilters);
 
     loadData();
