@@ -19,12 +19,10 @@
         <input id="searchInput" type="text" placeholder="Cari Kode / Nama / UOM / Type / Category..." 
           class="px-3 py-1.5 rounded bg-slate-800 border border-slate-700 text-sm text-white placeholder-slate-400 focus:outline-none focus:border-blue-400 w-full sm:w-60">
         
-        <!-- Combobox Category -->
         <select id="categorySelect" class="px-3 py-1.5 rounded bg-slate-800 border border-slate-700 text-sm text-white focus:outline-none focus:border-blue-400 max-w-[180px]">
           <option value="ALL">Semua Category</option>
         </select>
 
-        <!-- Combobox Type -->
         <select id="typeSelect" class="px-3 py-1.5 rounded bg-slate-800 border border-slate-700 text-sm text-white focus:outline-none focus:border-blue-400 max-w-[180px]">
           <option value="ALL">Semua Type</option>
         </select>
@@ -49,7 +47,6 @@
 
   <!-- Main Content -->
   <div class="max-w-7xl mx-auto p-4 md:p-6">
-    <!-- Ringkasan Cepat -->
     <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
       <div class="bg-white p-3.5 rounded-lg shadow-sm border border-slate-200">
         <div class="text-xs text-slate-500">Total Item (Database)</div>
@@ -69,10 +66,9 @@
       </div>
     </div>
 
-    <!-- Tabel Utama -->
     <div class="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
-      <div class="px-4 py-2 bg-blue-50/70 border-b border-slate-200 text-[11px] text-slate-600 flex items-center justify-between">
-        <span>💡 Tap / klik <b>Nama Barang</b> untuk melihat rincian stok per lokasi dalam tampilan vertikal (ramah HP).</span>
+      <div class="px-4 py-2 bg-blue-50/70 border-b border-slate-200 text-[11px] text-slate-600">
+        <span>💡 Tap / klik <b>Nama Barang</b> untuk melihat rincian stok & harga jual dalam tampilan vertikal (ramah HP).</span>
       </div>
       <div class="overflow-x-auto max-h-[68vh]">
         <table class="w-full text-xs text-left border-collapse">
@@ -101,7 +97,6 @@
         </table>
       </div>
 
-      <!-- Pagination -->
       <div class="px-4 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs">
         <span id="pageInfo" class="text-slate-600">Halaman 1</span>
         <div class="flex gap-2">
@@ -112,10 +107,9 @@
     </div>
   </div>
 
-  <!-- Modal Form Detail Stock Barang (Vertikal / Mobile-Friendly) -->
+  <!-- Modal Form Detail Stock Barang -->
   <div id="itemStockModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-3 sm:p-4" onclick="closeItemModal(event)">
     <div class="bg-white rounded-xl shadow-xl max-w-md w-full overflow-hidden flex flex-col max-h-[90vh]" onclick="event.stopPropagation()">
-      <!-- Header Modal -->
       <div class="px-4 py-3.5 bg-slate-900 text-white flex items-center justify-between shrink-0">
         <div>
           <h3 class="font-bold text-base">Informasi Detail Stock</h3>
@@ -123,13 +117,7 @@
         </div>
         <button onclick="hideItemModal()" class="text-slate-400 hover:text-white text-2xl leading-none px-1">&times;</button>
       </div>
-
-      <!-- Body Form Vertikal -->
-      <div id="itemModalBody" class="p-4 overflow-y-auto space-y-3 text-sm">
-        <!-- Diisi otomatis via JavaScript -->
-      </div>
-
-      <!-- Footer Modal -->
+      <div id="itemModalBody" class="p-4 overflow-y-auto space-y-3 text-sm"></div>
       <div class="px-4 py-3 bg-slate-50 border-t flex items-center justify-between gap-2 shrink-0">
         <div id="itemModalActions" class="flex gap-2"></div>
         <button onclick="hideItemModal()" class="px-4 py-2 bg-slate-800 text-white text-xs font-medium rounded-lg hover:bg-slate-700 ml-auto">
@@ -171,7 +159,39 @@
     let currentPage = 1;
     const rowsPerPage = 50;
 
-    const getUom = (row) => String(row.UOM ?? row.UnitToConvert ?? row.Satuan ?? '').trim();
+    const getUom = (row) => String((row && (row.UOM ?? row.UnitToConvert ?? row.Satuan)) ?? '').trim();
+
+    const getUomSales = (row) => {
+      if (!row || typeof row !== 'object') return '';
+      const val = row.UOMSales ?? row.uomSales ?? row.Uomsales ?? row.UOM_Sales ?? '';
+      return String(val ?? '').trim();
+    };
+
+    const getSalesPriceDisplay = (row) => {
+      if (!row || typeof row !== 'object') return '-';
+      const keys = Object.keys(row);
+      const matchedKey = keys.find(k => {
+        const norm = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+        return ['hargajual', 'unitsales', 'hargajualunitsales', 'salesprice', 'harga'].includes(norm);
+      });
+
+      const rawPrice = matchedKey ? row[matchedKey] : null;
+      const uomSales = getUomSales(row);
+
+      if (rawPrice === null || rawPrice === undefined || String(rawPrice).trim() === '') {
+        return uomSales ? `- / ${uomSales}` : '-';
+      }
+
+      const num = typeof rawPrice === 'number'
+        ? rawPrice
+        : Number(String(rawPrice).replace(/[^0-9.-]+/g, ''));
+
+      const formattedPrice = (!Number.isNaN(num) && String(rawPrice).trim() !== '')
+        ? 'Rp ' + num.toLocaleString('id-ID')
+        : String(rawPrice).trim();
+
+      return uomSales ? `${formattedPrice} / ${uomSales}` : formattedPrice;
+    };
 
     const fmtNum = (val) => {
       const num = Number(val) || 0;
@@ -228,7 +248,7 @@
     }
 
     function escapeHtml(str) {
-      return String(str)
+      return String(str ?? '')
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
@@ -253,7 +273,7 @@
         statusEl.textContent = `Terhubung • ${stockData.length.toLocaleString('id-ID')} item dimuat (${new Date().toLocaleTimeString('id-ID')})`;
       } catch (err) {
         statusEl.textContent = 'Gagal memuat data: ' + err.message;
-        document.getElementById('tableBody').innerHTML = `<tr><td colspan="15" class="text-center py-8 text-rose-600">Error: ${err.message}</td></tr>`;
+        document.getElementById('tableBody').innerHTML = `<tr><td colspan="15" class="text-center py-8 text-rose-600">Error: ${escapeHtml(err.message)}</td></tr>`;
       }
     }
 
@@ -321,8 +341,8 @@
           const poVal = Number(row.PO) || 0;
           const doVal = Number(row.DO) || 0;
           const availVal = Number(row.Available_Stock) || 0;
-          const itemIdEsc = String(row.ItemId).replace(/'/g, "\\'");
-          const nameEsc = String(row.Name || '').replace(/'/g, "\\'");
+          const itemIdEsc = String(row.ItemId ?? '').replace(/'/g, "\\'");
+          const nameEsc = String(row.Name ?? '').replace(/'/g, "\\'");
           const uomText = getUom(row) || '-';
 
           const poCell = poVal > 0
@@ -371,94 +391,104 @@
       renderTable();
     }
 
-    // Form Vertikal Detail Stock per Barang (Untuk HP / Layar Kecil)
     function openItemStockModal(itemId) {
-      const item = stockData.find(r => String(r.ItemId) === String(itemId));
-      if (!item) return;
+      try {
+        const item = stockData.find(r => String(r.ItemId) === String(itemId));
+        if (!item) return;
 
-      const poVal = Number(item.PO) || 0;
-      const doVal = Number(item.DO) || 0;
-      const totalGudang = Number(item.Total_Gudang) || 0;
-      const availVal = Number(item.Available_Stock) || 0;
-      const uomText = getUom(item) || '-';
+        const poVal = Number(item.PO) || 0;
+        const doVal = Number(item.DO) || 0;
+        const totalGudang = Number(item.Total_Gudang) || 0;
+        const availVal = Number(item.Available_Stock) || 0;
+        const uomText = getUom(item) || '-';
+        const uomSalesText = getUomSales(item) || '-';
+        const priceText = getSalesPriceDisplay(item);
 
-      const availStyle = availVal < 0
-        ? 'bg-rose-50 border-rose-300 text-rose-700 font-bold'
-        : (availVal === 0
-          ? 'bg-slate-100 border-slate-300 text-slate-600 font-bold'
-          : 'bg-blue-50 border-blue-300 text-blue-800 font-bold');
+        const availStyle = availVal < 0
+          ? 'bg-rose-50 border-rose-300 text-rose-700 font-bold'
+          : (availVal === 0
+            ? 'bg-slate-100 border-slate-300 text-slate-600 font-bold'
+            : 'bg-blue-50 border-blue-300 text-blue-800 font-bold');
 
-      document.getElementById('itemModalSub').textContent = `Kode Barang: ${item.ItemId}`;
+        document.getElementById('itemModalSub').textContent = `Kode Barang: ${item.ItemId}`;
 
-      const formRow = (label, value, extraClass = 'bg-slate-50 border-slate-200 text-slate-800') => `
-        <div>
-          <label class="block text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-1">${label}</label>
-          <input type="text" readonly value="${escapeHtml(value)}" 
-            class="w-full px-3 py-2 rounded-lg border text-sm focus:outline-none ${extraClass}">
-        </div>
-      `;
-
-      const binRow = (binName, qty) => {
-        const num = Number(qty) || 0;
-        const style = num > 0
-          ? 'bg-white border-slate-300 text-slate-900 font-semibold'
-          : 'bg-slate-50 border-slate-200 text-slate-400';
-        return `
-          <div class="flex items-center justify-between px-3 py-2 rounded-lg border ${style}">
-            <span class="text-xs font-semibold text-slate-600">Gudang / Bin ${binName}</span>
-            <span class="text-sm font-mono">${fmtNum(num)}</span>
+        const formRow = (label, value, extraClass = 'bg-slate-50 border-slate-200 text-slate-800') => `
+          <div>
+            <label class="block text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-1">${label}</label>
+            <input type="text" readonly value="${escapeHtml(value)}" 
+              class="w-full px-3 py-2 rounded-lg border text-sm focus:outline-none ${extraClass}">
           </div>
         `;
-      };
 
-      document.getElementById('itemModalBody').innerHTML = `
-        ${formRow('Nama Barang', item.Name || '-', 'bg-slate-50 border-slate-200 text-slate-900 font-semibold')}
+        const binRow = (binName, qty) => {
+          const num = Number(qty) || 0;
+          const style = num > 0
+            ? 'bg-white border-slate-300 text-slate-900 font-semibold'
+            : 'bg-slate-50 border-slate-200 text-slate-400';
+          return `
+            <div class="flex items-center justify-between px-3 py-2 rounded-lg border ${style}">
+              <span class="text-xs font-semibold text-slate-600">Gudang / Bin ${binName}</span>
+              <span class="text-sm font-mono">${fmtNum(num)}</span>
+            </div>
+          `;
+        };
 
-        <div class="grid grid-cols-3 gap-2">
-          ${formRow('UOM', uomText)}
-          ${formRow('Category', item.Category || '-')}
-          ${formRow('Type', item.Type || '-')}
-        </div>
+        document.getElementById('itemModalBody').innerHTML = `
+          ${formRow('Nama Barang', item.Name || '-', 'bg-slate-50 border-slate-200 text-slate-900 font-semibold')}
+          ${formRow('Harga Jual / Unit Sales', priceText, 'bg-emerald-50/70 border-emerald-300 text-emerald-900 font-bold')}
 
-        <div class="pt-1 border-t border-slate-200">
-          <div class="text-xs font-bold text-slate-700 mb-2">Ringkasan Stok & Transaksi</div>
-          <div class="space-y-2">
-            ${formRow('Available Stock (Siap Jual)', fmtNum(availVal), availStyle)}
-            ${formRow('Total Gudang (Fisik)', fmtNum(totalGudang), 'bg-slate-100 border-slate-300 text-slate-900 font-bold')}
-            <div class="grid grid-cols-2 gap-2.5">
-              ${formRow('PO Open (Masuk)', fmtNum(poVal), poVal > 0 ? 'bg-emerald-50 border-emerald-300 text-emerald-800 font-bold' : 'bg-slate-50 border-slate-200 text-slate-500')}
-              ${formRow('DO Open (Keluar)', fmtNum(doVal), doVal > 0 ? 'bg-amber-50 border-amber-300 text-amber-800 font-bold' : 'bg-slate-50 border-slate-200 text-slate-500')}
+          <div class="grid grid-cols-2 gap-2.5">
+            ${formRow('Satuan Sales (UOMSales)', uomSalesText)}
+            ${formRow('UOM Stok', uomText)}
+          </div>
+
+          <div class="grid grid-cols-2 gap-2.5">
+            ${formRow('Category', item.Category || '-')}
+            ${formRow('Type', item.Type || '-')}
+          </div>
+
+          <div class="pt-1 border-t border-slate-200">
+            <div class="text-xs font-bold text-slate-700 mb-2">Ringkasan Stok & Transaksi</div>
+            <div class="space-y-2">
+              ${formRow('Available Stock (Siap Jual)', fmtNum(availVal), availStyle)}
+              ${formRow('Total Gudang (Fisik)', fmtNum(totalGudang), 'bg-slate-100 border-slate-300 text-slate-900 font-bold')}
+              <div class="grid grid-cols-2 gap-2.5">
+                ${formRow('PO Open (Masuk)', fmtNum(poVal), poVal > 0 ? 'bg-emerald-50 border-emerald-300 text-emerald-800 font-bold' : 'bg-slate-50 border-slate-200 text-slate-500')}
+                ${formRow('DO Open (Keluar)', fmtNum(doVal), doVal > 0 ? 'bg-amber-50 border-amber-300 text-amber-800 font-bold' : 'bg-slate-50 border-slate-200 text-slate-500')}
+              </div>
             </div>
           </div>
-        </div>
 
-        <div class="pt-1 border-t border-slate-200">
-          <div class="text-xs font-bold text-slate-700 mb-2">Rincian Stok per Lokasi / Bin</div>
-          <div class="space-y-1.5">
-            ${binRow('A02', item.A02)}
-            ${binRow('B25', item.B25)}
-            ${binRow('OFF', item.OFF)}
-            ${binRow('OSP', item.OSP)}
-            ${binRow('SPR', item.SPR)}
-            ${binRow('SPB', item.SPB)}
+          <div class="pt-1 border-t border-slate-200">
+            <div class="text-xs font-bold text-slate-700 mb-2">Rincian Stok per Lokasi / Bin</div>
+            <div class="space-y-1.5">
+              ${binRow('A02', item.A02)}
+              ${binRow('B25', item.B25)}
+              ${binRow('OFF', item.OFF)}
+              ${binRow('OSP', item.OSP)}
+              ${binRow('SPR', item.SPR)}
+              ${binRow('SPB', item.SPB)}
+            </div>
           </div>
-        </div>
-      `;
+        `;
 
-      const itemIdEsc = String(item.ItemId).replace(/'/g, "\\'");
-      const nameEsc = String(item.Name || '').replace(/'/g, "\\'");
-      let actionBtns = '';
-      if (poVal > 0) {
-        actionBtns += `<button onclick="hideItemModal(); openDetail('PO', '${itemIdEsc}', '${nameEsc}')" class="px-3 py-2 bg-emerald-600 text-white text-xs font-medium rounded-lg hover:bg-emerald-500">Lihat PO (${fmtNum(poVal)})</button>`;
-      }
-      if (doVal > 0) {
-        actionBtns += `<button onclick="hideItemModal(); openDetail('DO', '${itemIdEsc}', '${nameEsc}')" class="px-3 py-2 bg-amber-600 text-white text-xs font-medium rounded-lg hover:bg-amber-500">Lihat DO (${fmtNum(doVal)})</button>`;
-      }
-      document.getElementById('itemModalActions').innerHTML = actionBtns;
+        const itemIdEsc = String(item.ItemId ?? '').replace(/'/g, "\\'");
+        const nameEsc = String(item.Name ?? '').replace(/'/g, "\\'");
+        let actionBtns = '';
+        if (poVal > 0) {
+          actionBtns += `<button onclick="hideItemModal(); openDetail('PO', '${itemIdEsc}', '${nameEsc}')" class="px-3 py-2 bg-emerald-600 text-white text-xs font-medium rounded-lg hover:bg-emerald-500">Lihat PO (${fmtNum(poVal)})</button>`;
+        }
+        if (doVal > 0) {
+          actionBtns += `<button onclick="hideItemModal(); openDetail('DO', '${itemIdEsc}', '${nameEsc}')" class="px-3 py-2 bg-amber-600 text-white text-xs font-medium rounded-lg hover:bg-amber-500">Lihat DO (${fmtNum(doVal)})</button>`;
+        }
+        document.getElementById('itemModalActions').innerHTML = actionBtns;
 
-      const modal = document.getElementById('itemStockModal');
-      modal.classList.remove('hidden');
-      modal.classList.add('flex');
+        const modal = document.getElementById('itemStockModal');
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+      } catch (err) {
+        alert('Gagal membuka detail: ' + err.message);
+      }
     }
 
     function hideItemModal() {
@@ -494,9 +524,9 @@
         `;
         tbody.innerHTML = matches.length ? matches.map(m => `
           <tr>
-            <td class="px-3 py-2 font-mono font-semibold text-emerald-700">${m.PurchaseOrderNo}</td>
+            <td class="px-3 py-2 font-mono font-semibold text-emerald-700">${escapeHtml(m.PurchaseOrderNo)}</td>
             <td class="px-3 py-2">${fmtDate(m.TransactionDate)}</td>
-            <td class="px-3 py-2">${m.UnitToConvert || '-'}</td>
+            <td class="px-3 py-2">${escapeHtml(m.UnitToConvert || '-')}</td>
             <td class="px-3 py-2 text-right">${fmtNum(m.Conversion)}</td>
             <td class="px-3 py-2 text-right font-bold">${fmtNum(m.PO)}</td>
           </tr>
@@ -514,9 +544,9 @@
         `;
         tbody.innerHTML = matches.length ? matches.map(m => `
           <tr>
-            <td class="px-3 py-2 font-mono font-semibold text-amber-700">${m.DeliveryOrderNo}</td>
-            <td class="px-3 py-2">${m.Name || m.CustomerId || '-'}</td>
-            <td class="px-3 py-2">${m.UOM || '-'}</td>
+            <td class="px-3 py-2 font-mono font-semibold text-amber-700">${escapeHtml(m.DeliveryOrderNo)}</td>
+            <td class="px-3 py-2">${escapeHtml(m.Name || m.CustomerId || '-')}</td>
+            <td class="px-3 py-2">${escapeHtml(m.UOM || '-')}</td>
             <td class="px-3 py-2 text-right font-bold">${fmtNum(m.Qty)}</td>
           </tr>
         `).join('') : `<tr><td colspan="4" class="text-center py-4 text-slate-400">Rincian DO tidak ditemukan di tab DOOpen.</td></tr>`;
