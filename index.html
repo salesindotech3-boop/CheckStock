@@ -16,7 +16,7 @@
         <p id="statusInfo" class="text-xs text-slate-400 mt-0.5">Memuat data dari Google Sheets...</p>
       </div>
       <div class="flex flex-wrap items-center gap-2">
-        <input id="searchInput" type="text" placeholder="Cari Kode / Nama / Type / Category..." 
+        <input id="searchInput" type="text" placeholder="Cari Kode / Nama / UOM / Type / Category..." 
           class="px-3 py-1.5 rounded bg-slate-800 border border-slate-700 text-sm text-white placeholder-slate-400 focus:outline-none focus:border-blue-400 w-full sm:w-60">
         
         <!-- Combobox Category -->
@@ -80,6 +80,7 @@
             <tr>
               <th class="px-3 py-2.5">Item ID</th>
               <th class="px-3 py-2.5">Nama Barang</th>
+              <th class="px-3 py-2.5">UOM</th>
               <th class="px-3 py-2.5">Type</th>
               <th class="px-3 py-2.5">Category</th>
               <th class="px-3 py-2.5 text-right bg-emerald-950/60">PO</th>
@@ -95,7 +96,7 @@
             </tr>
           </thead>
           <tbody id="tableBody" class="divide-y divide-slate-200">
-            <tr><td colspan="14" class="text-center py-10 text-slate-400">Sedang mengambil data...</td></tr>
+            <tr><td colspan="15" class="text-center py-10 text-slate-400">Sedang mengambil data...</td></tr>
           </tbody>
         </table>
       </div>
@@ -169,6 +170,8 @@
     let filteredData = [];
     let currentPage = 1;
     const rowsPerPage = 50;
+
+    const getUom = (row) => String(row.UOM ?? row.UnitToConvert ?? row.Satuan ?? '').trim();
 
     const fmtNum = (val) => {
       const num = Number(val) || 0;
@@ -250,7 +253,7 @@
         statusEl.textContent = `Terhubung • ${stockData.length.toLocaleString('id-ID')} item dimuat (${new Date().toLocaleTimeString('id-ID')})`;
       } catch (err) {
         statusEl.textContent = 'Gagal memuat data: ' + err.message;
-        document.getElementById('tableBody').innerHTML = `<tr><td colspan="14" class="text-center py-8 text-rose-600">Error: ${err.message}</td></tr>`;
+        document.getElementById('tableBody').innerHTML = `<tr><td colspan="15" class="text-center py-8 text-rose-600">Error: ${err.message}</td></tr>`;
       }
     }
 
@@ -273,6 +276,7 @@
       filteredData = stockData.filter(item => {
         const itemCat = String(item.Category || '').trim();
         const itemType = String(item.Type || '').trim();
+        const itemUom = getUom(item);
 
         if (selectedCat !== 'ALL' && itemCat !== selectedCat) return false;
         if (selectedType !== 'ALL' && itemType !== selectedType) return false;
@@ -284,6 +288,7 @@
         if (!q) return true;
         return String(item.ItemId || '').toLowerCase().includes(q) ||
                String(item.Name || '').toLowerCase().includes(q) ||
+               itemUom.toLowerCase().includes(q) ||
                itemType.toLowerCase().includes(q) ||
                itemCat.toLowerCase().includes(q);
       });
@@ -310,7 +315,7 @@
       const slice = filteredData.slice(start, start + rowsPerPage);
 
       if (slice.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="14" class="text-center py-8 text-slate-400">Tidak ada data yang cocok.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="15" class="text-center py-8 text-slate-400">Tidak ada data yang cocok.</td></tr>`;
       } else {
         tbody.innerHTML = slice.map(row => {
           const poVal = Number(row.PO) || 0;
@@ -318,6 +323,7 @@
           const availVal = Number(row.Available_Stock) || 0;
           const itemIdEsc = String(row.ItemId).replace(/'/g, "\\'");
           const nameEsc = String(row.Name || '').replace(/'/g, "\\'");
+          const uomText = getUom(row) || '-';
 
           const poCell = poVal > 0
             ? `<button onclick="openDetail('PO', '${itemIdEsc}', '${nameEsc}')" class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold hover:bg-emerald-200 underline cursor-pointer">${fmtNum(poVal)}</button>`
@@ -337,6 +343,7 @@
                   ${escapeHtml(row.Name || '-')}
                 </button>
               </td>
+              <td class="px-3 py-2 whitespace-nowrap text-slate-600 font-medium">${escapeHtml(uomText)}</td>
               <td class="px-3 py-2 whitespace-nowrap text-slate-600">${escapeHtml(row.Type || '-')}</td>
               <td class="px-3 py-2 whitespace-nowrap text-slate-600">${escapeHtml(row.Category || '-')}</td>
               <td class="px-3 py-2 text-right bg-emerald-50/40">${poCell}</td>
@@ -373,6 +380,7 @@
       const doVal = Number(item.DO) || 0;
       const totalGudang = Number(item.Total_Gudang) || 0;
       const availVal = Number(item.Available_Stock) || 0;
+      const uomText = getUom(item) || '-';
 
       const availStyle = availVal < 0
         ? 'bg-rose-50 border-rose-300 text-rose-700 font-bold'
@@ -406,7 +414,8 @@
       document.getElementById('itemModalBody').innerHTML = `
         ${formRow('Nama Barang', item.Name || '-', 'bg-slate-50 border-slate-200 text-slate-900 font-semibold')}
 
-        <div class="grid grid-cols-2 gap-2.5">
+        <div class="grid grid-cols-3 gap-2">
+          ${formRow('UOM', uomText)}
           ${formRow('Category', item.Category || '-')}
           ${formRow('Type', item.Type || '-')}
         </div>
